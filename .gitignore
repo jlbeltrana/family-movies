@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Wrangler / Cloudflare
+.wrangler/
+.dev.vars
+*.min.js
+
+# Local env
+.env
+.env.local
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+scripts/output/
+*.apk
+*.aab
+
+# Firebase
+.firebase/
+*-debug.log
+*-debug.log.*
+backend/functions/.env
+
+# Android
+android-app/.gradle/
+android-app/app/build/
+android-app/local.properties
+*.keystore

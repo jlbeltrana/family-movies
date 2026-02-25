@@ -1,0 +1,11 @@
+name = "family-movies-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# R2: binding al bucket donde están los vídeos HLS
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "family-movies-media"
+
+# JWT_SECRET se configura como secret (no en el repo):
+# wrangler secret put JWT_SECRET

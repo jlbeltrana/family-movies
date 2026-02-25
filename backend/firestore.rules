@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allowlist: documento config/allowedEmails con campo "emails" tipo map: { "email@ejemplo.com": true }
+    function isAllowed() {
+      let allowed = get(/databases/$(database)/documents/config/allowedEmails);
+      return request.auth != null && request.auth.token.email in allowed.data.emails;
+    }
+
+    // Catálogo de películas: solo lectura para usuarios en la allowlist
+    match /movies/{movieId} {
+      allow read: if isAllowed();
+      allow write: if false;
+    }
+
+    // Progreso por usuario: cada usuario solo lee/escribe su propia subcolección
+    match /users/{uid}/progress/{movieId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid && isAllowed();
+    }
+
+    // Config (allowlist): solo lectura para usuarios autenticados (la app no escribe aquí; tú desde la consola)
+    match /config/{doc} {
+      allow read: if isAllowed();
+      allow write: if false;
+    }
+  }
+}
