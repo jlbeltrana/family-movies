@@ -31,7 +31,8 @@ export default {
       if (!valid) {
         return new Response("Invalid or expired token", { status: 401 });
       }
-      payload = jwt.decode(token);
+      // jwt.decode() devuelve { header, payload } — los claims están en .payload
+      payload = jwt.decode(token).payload;
     } catch (e) {
       return new Response("Invalid token", { status: 401 });
     }
@@ -53,7 +54,12 @@ export default {
     const contentType = getContentType(path);
     const headers = new Headers();
     headers.set("Content-Type", contentType);
-    headers.set("Cache-Control", "public, max-age=3600");
+    // Manifests (.m3u8) no deben cachearse: listan segmentos y pueden cambiar.
+    // Segmentos (.ts, .mp4) son inmutables una vez subidos: cache largo.
+    const cacheControl = path.endsWith(".m3u8")
+      ? "no-cache, no-store"
+      : "public, max-age=31536000, immutable";
+    headers.set("Cache-Control", cacheControl);
     if (object.etag) {
       headers.set("ETag", object.etag);
     }

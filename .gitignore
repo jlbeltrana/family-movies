@@ -38,3 +38,4 @@ android-app/.gradle/
 android-app/app/build/
 android-app/local.properties
 *.keystore
+android-app/app/google-services.json
