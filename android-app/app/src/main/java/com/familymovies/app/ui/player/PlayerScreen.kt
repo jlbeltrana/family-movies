@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +39,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -69,6 +72,8 @@ fun PlayerScreen(
     var savedPosition by remember { mutableLongStateOf(0L) }
     var showResumeDialog by remember { mutableStateOf(false) }
     var speedIndex by remember { mutableIntStateOf(1) } // 1 = 1× por defecto
+    var playerError by remember { mutableStateOf<String?>(null) }
+    var isBuffering by remember { mutableStateOf(true) }
 
     // Pantalla completa inmersiva
     DisposableEffect(Unit) {
@@ -101,6 +106,21 @@ fun PlayerScreen(
             prepare()
             playWhenReady = true
         }
+    }
+
+    // Capturar estado del player (buffering + errores)
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = playbackState == Player.STATE_BUFFERING
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                isBuffering = false
+                playerError = "[${error.errorCode}] ${error.message}\nCausa: ${error.cause?.message}"
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
     }
 
     // Guardar progreso cada 15 segundos
@@ -176,6 +196,32 @@ fun PlayerScreen(
                     text = SPEED_LABELS[speedIndex],
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        // Indicador de buffering
+        if (isBuffering) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = Purple,
+                strokeWidth = 3.dp
+            )
+        }
+
+        // Error de reproducción
+        playerError?.let { err ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(24.dp)
+                    .background(Color(0xCC000000), RoundedCornerShape(12.dp))
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Error de reproducción:\n$err",
+                    color = Color(0xFFFF6B6B),
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                 )
             }
         }

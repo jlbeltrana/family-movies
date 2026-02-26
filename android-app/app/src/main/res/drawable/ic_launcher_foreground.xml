@@ -4,8 +4,48 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Play triangle -->
+
+    <!-- Palomitas: 5 bolitas crema/amarillo -->
+    <!-- Izquierda -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M40,28 L40,80 L82,54 Z"/>
+        android:fillColor="#FFF9C4"
+        android:pathData="M24,52 A12,12 0 1,0 48,52 A12,12 0 1,0 24,52 Z"/>
+    <!-- Izquierda-centro -->
+    <path
+        android:fillColor="#FFFDE7"
+        android:pathData="M35,41 A11,11 0 1,0 57,41 A11,11 0 1,0 35,41 Z"/>
+    <!-- Centro (más grande) -->
+    <path
+        android:fillColor="#FFF9C4"
+        android:pathData="M41,50 A13,13 0 1,0 67,50 A13,13 0 1,0 41,50 Z"/>
+    <!-- Derecha-centro -->
+    <path
+        android:fillColor="#FFFDE7"
+        android:pathData="M51,41 A11,11 0 1,0 73,41 A11,11 0 1,0 51,41 Z"/>
+    <!-- Derecha -->
+    <path
+        android:fillColor="#FFF9C4"
+        android:pathData="M60,52 A12,12 0 1,0 84,52 A12,12 0 1,0 60,52 Z"/>
+
+    <!-- Borde superior del cubo (oscuro) -->
+    <path
+        android:fillColor="#B71C1C"
+        android:pathData="M28,57 L80,57 L78,63 L30,63 Z"/>
+
+    <!-- Cubo rojo -->
+    <path
+        android:fillColor="#D32F2F"
+        android:pathData="M30,63 L36,83 L72,83 L78,63 Z"/>
+
+    <!-- Rayas del cubo (rojo más claro) -->
+    <path
+        android:fillColor="#EF5350"
+        android:pathData="M34,63 L38,83 L33,83 L30,63 Z"/>
+    <path
+        android:fillColor="#EF5350"
+        android:pathData="M48,63 L51,83 L45,83 L43,63 Z"/>
+    <path
+        android:fillColor="#EF5350"
+        android:pathData="M62,63 L67,83 L63,83 L58,63 Z"/>
+
 </vector>

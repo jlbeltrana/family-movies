@@ -38,15 +38,23 @@ class HomeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState
 
+    private val _selectedCategory = MutableStateFlow("Todas")
+    val selectedCategory: StateFlow<String> = _selectedCategory
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
     init {
         loadAll()
     }
 
-    private fun loadAll() {
+    private fun loadAll(refreshing: Boolean = false) {
         val email = Firebase.auth.currentUser?.email ?: run {
             _uiState.value = HomeUiState.NotAllowed
             return
         }
+        if (!refreshing) _uiState.value = HomeUiState.Loading
+
         viewModelScope.launch {
             val allowedDeferred = async { firestoreRepository.isUserAllowed(email) }
             val moviesDeferred = async { firestoreRepository.getMovies() }
@@ -54,6 +62,7 @@ class HomeViewModel : ViewModel() {
 
             val allowed = allowedDeferred.await()
             if (!allowed) {
+                _isRefreshing.value = false
                 _uiState.value = HomeUiState.NotAllowed
                 return@launch
             }
@@ -61,11 +70,13 @@ class HomeViewModel : ViewModel() {
             val movies = try {
                 moviesDeferred.await()
             } catch (e: Exception) {
+                _isRefreshing.value = false
                 _uiState.value = HomeUiState.Error("Error cargando películas: ${e.message}")
                 return@launch
             }
 
             val catalogResult = catalogTokenDeferred.await()
+            _isRefreshing.value = false
 
             catalogResult.fold(
                 onSuccess = { catalog ->
@@ -83,32 +94,23 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    fun playMovie(movieId: String) {
-        val ready = currentReadyState() ?: return
-        viewModelScope.launch {
-            _uiState.value = HomeUiState.Loading
-            playTokenRepository.getPlayToken(movieId).fold(
-                onSuccess = { playToken ->
-                    _uiState.value = HomeUiState.PlayReady(
-                        readyState = ready,
-                        movieId = movieId,
-                        playToken = playToken
-                    )
-                },
-                onFailure = { e ->
-                    _uiState.value = HomeUiState.Error(e.message ?: "Error al obtener token")
-                }
-            )
-        }
+    fun selectCategory(category: String) {
+        _selectedCategory.value = category
     }
+
+    fun refresh() {
+        if (_isRefreshing.value) return
+        _isRefreshing.value = true
+        loadAll(refreshing = true)
+    }
+
+    fun retry() = loadAll()
 
     fun resetToReady() {
         currentReadyState()?.let { _uiState.value = it }
     }
 
-    fun retry() = loadAll()
-
-    private fun currentReadyState(): HomeUiState.Ready? =
+    fun currentReadyState(): HomeUiState.Ready? =
         when (val s = _uiState.value) {
             is HomeUiState.Ready -> s
             is HomeUiState.PlayReady -> s.readyState

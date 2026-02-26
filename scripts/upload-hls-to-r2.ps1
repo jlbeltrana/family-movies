@@ -1,6 +1,6 @@
 # Sube una carpeta HLS (master.m3u8 + segmentos .ts) a R2 bajo movies/<slug>/
+# Retoma automaticamente si se interrumpe: guarda progreso en upload-progress-<slug>.log
 # Uso interactivo: .\upload-hls-to-r2.ps1
-# Uso por parametros: .\upload-hls-to-r2.ps1 -Slug "mi-pelicula"
 
 param(
     [string]$Slug = "",
@@ -48,34 +48,68 @@ if (-not (Test-Path (Join-Path $HlsDir "master.m3u8"))) {
     exit 1
 }
 
-$files  = Get-ChildItem -Path $HlsDir -File
-$total  = $files.Count
-$i      = 0
+# --- Progreso: cargar archivos ya subidos ---
+$progressFile = Join-Path $scriptDir "upload-progress-$Slug.log"
+$alreadyUploaded = @{}
 
-Write-Host ""
-Write-Host "Subiendo $total archivos a R2 bajo movies/$Slug/ ..." -ForegroundColor Cyan
-Write-Host ""
-
-$ErrorActionPreference = "Continue"
-foreach ($f in $files) {
-    $i++
-    $key = "movies/$Slug/$($f.Name)"
-    Write-Host "[$i/$total] $key"
-    Push-Location $workerDir
-    $output = & $wrangler r2 object put "$Bucket/$key" --file $f.FullName 2>&1
-    Pop-Location
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host $output
-        Write-Error "Error subiendo $key"
-        exit 1
+if (Test-Path $progressFile) {
+    Write-Host ""
+    Write-Host "Se encontro un progreso anterior para '$Slug'." -ForegroundColor Yellow
+    $count = (Get-Content $progressFile | Measure-Object -Line).Lines
+    Write-Host "$count archivos ya subidos. Retomando desde donde quedo..." -ForegroundColor Green
+    Get-Content $progressFile | ForEach-Object {
+        if (-not [string]::IsNullOrWhiteSpace($_)) { $alreadyUploaded[$_.Trim()] = $true }
     }
 }
-$ErrorActionPreference = "Stop"
+
+# --- Archivos a subir (excluye .vtt) ---
+$files = Get-ChildItem -Path $HlsDir -File | Where-Object { $_.Extension -ne ".vtt" }
+$total = $files.Count
+$pending = $files | Where-Object { -not $alreadyUploaded.ContainsKey($_.Name) }
+$pendingCount = ($pending | Measure-Object).Count
 
 Write-Host ""
-Write-Host "Listo. $total archivos de video subidos." -ForegroundColor Green
+Write-Host "Total: $total archivos | Ya subidos: $($alreadyUploaded.Count) | Pendientes: $pendingCount" -ForegroundColor Cyan
+Write-Host ""
 
-# Subir carátula opcional
+if ($pendingCount -eq 0) {
+    Write-Host "Todo ya estaba subido." -ForegroundColor Green
+} else {
+    $i = $alreadyUploaded.Count
+    $ErrorActionPreference = "Continue"
+    foreach ($f in $pending) {
+        $i++
+        $key = "movies/$Slug/$($f.Name)"
+        Write-Host "[$i/$total] $key"
+        $uploaded = $false
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Push-Location $workerDir
+            $output = & $wrangler r2 object put "$Bucket/$key" --file $f.FullName 2>&1
+            Pop-Location
+            if ($LASTEXITCODE -eq 0) { $uploaded = $true; break }
+            Write-Host "  Intento $attempt fallido, reintentando en 3s..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 3
+        }
+        if (-not $uploaded) {
+            Write-Host $output
+            Write-Host ""
+            Write-Host "Error tras 3 intentos. Progreso guardado en: $progressFile" -ForegroundColor Red
+            Write-Host "Vuelve a correr el script para retomar desde aqui." -ForegroundColor Yellow
+            exit 1
+        }
+        # Anotar como subido
+        Add-Content -Path $progressFile -Value $f.Name
+    }
+    $ErrorActionPreference = "Stop"
+
+    Write-Host ""
+    Write-Host "Listo. $total archivos de video subidos." -ForegroundColor Green
+
+    # Borrar archivo de progreso al completar
+    if (Test-Path $progressFile) { Remove-Item $progressFile -Force }
+}
+
+# Subir caratula opcional
 Write-Host ""
 Write-Host "Caratula (poster.jpg/png): pega la ruta de la imagen o pulsa Enter para omitir:"
 $posterPath = (Read-Host).Trim().Trim('"')

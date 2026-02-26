@@ -71,7 +71,7 @@ Write-Host ""
 Write-Host "Convirtiendo..." -ForegroundColor Cyan
 
 $ErrorActionPreference = "Continue"
-& ffmpeg -i $InputFile -c:v copy -c:a copy -sn -f hls -hls_time 6 -hls_list_size 0 `
+& ffmpeg -i $InputFile -map 0:v:0 -map 0:a:0 -c:v copy -c:a aac -b:a 192k -ac 2 -f hls -hls_time 6 -hls_list_size 0 `
     -hls_segment_filename $segmentPattern $manifestPath
 $ErrorActionPreference = "Stop"
 

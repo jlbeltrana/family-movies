@@ -11,16 +11,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import com.familymovies.app.ui.common.FunBackground
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,27 +45,24 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.familymovies.app.data.model.Movie
-import com.familymovies.app.ui.theme.DarkBackground
+
 import com.familymovies.app.ui.theme.Purple
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onPlayVideo: (manifestUrl: String, token: String, movieId: String) -> Unit,
+    onNavigateToDetail: (movieId: String) -> Unit,
     onSignOut: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
-        when (val state = uiState) {
-            is HomeUiState.PlayReady -> {
-                val ready = state.readyState
-                val manifestUrl = "${state.playToken.baseUrl}/movies/${state.movieId}/master.m3u8"
-                onPlayVideo(manifestUrl, state.playToken.token, state.movieId)
-                viewModel.resetToReady()
-            }
+        when (uiState) {
             is HomeUiState.NotAllowed -> {
                 Firebase.auth.signOut()
                 onSignOut()
@@ -68,10 +72,10 @@ fun HomeScreen(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground)
+        modifier = Modifier.fillMaxSize()
     ) {
+        // Fondo mágico con estrellas y destellos
+        FunBackground()
         when (val state = uiState) {
             is HomeUiState.Loading -> {
                 CircularProgressIndicator(
@@ -81,23 +85,22 @@ fun HomeScreen(
             }
 
             is HomeUiState.Ready -> {
-                CatalogContent(
-                    state = state,
-                    onPlayMovie = { viewModel.playMovie(it) },
-                    onSignOut = {
-                        Firebase.auth.signOut()
-                        onSignOut()
-                    }
-                )
-            }
-
-            is HomeUiState.PlayReady -> {
-                // Sigue mostrando el catálogo mientras navega
-                CatalogContent(
-                    state = state.readyState,
-                    onPlayMovie = {},
-                    onSignOut = {}
-                )
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    CatalogContent(
+                        state = state,
+                        selectedCategory = selectedCategory,
+                        onSelectCategory = { viewModel.selectCategory(it) },
+                        onMovieClick = { onNavigateToDetail(it) },
+                        onSignOut = {
+                            Firebase.auth.signOut()
+                            onSignOut()
+                        }
+                    )
+                }
             }
 
             is HomeUiState.Error -> {
@@ -128,9 +131,23 @@ fun HomeScreen(
 @Composable
 private fun CatalogContent(
     state: HomeUiState.Ready,
-    onPlayMovie: (movieId: String) -> Unit,
+    selectedCategory: String,
+    onSelectCategory: (String) -> Unit,
+    onMovieClick: (movieId: String) -> Unit,
     onSignOut: () -> Unit
 ) {
+    val categories = listOf("Todas") + state.movies
+        .map { it.category }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .sorted()
+
+    val filteredMovies = if (selectedCategory == "Todas") {
+        state.movies
+    } else {
+        state.movies.filter { it.category == selectedCategory }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Header
         Row(
@@ -176,6 +193,39 @@ private fun CatalogContent(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
 
+            // Tabs de categoría
+            if (categories.size > 1) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(categories) { cat ->
+                        FilterChip(
+                            selected = cat == selectedCategory,
+                            onClick = { onSelectCategory(cat) },
+                            label = {
+                                Text(
+                                    text = cat.replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Purple,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFF1A1A2E),
+                                labelColor = Color.White.copy(alpha = 0.7f)
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = cat == selectedCategory,
+                                selectedBorderColor = Purple,
+                                borderColor = Color.White.copy(alpha = 0.2f)
+                            )
+                        )
+                    }
+                }
+            }
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -183,12 +233,12 @@ private fun CatalogContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(state.movies, key = { it.id }) { movie ->
+                items(filteredMovies, key = { it.id }) { movie ->
                     MovieCard(
                         movie = movie,
                         catalogToken = state.catalogToken,
                         baseUrl = state.baseUrl,
-                        onClick = { onPlayMovie(movie.id) }
+                        onClick = { onMovieClick(movie.id) }
                     )
                 }
             }
@@ -214,7 +264,6 @@ private fun MovieCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Poster con JWT
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(posterUrl)
@@ -226,7 +275,6 @@ private fun MovieCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Gradiente + título en la parte inferior
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -240,16 +288,26 @@ private fun MovieCard(
                     )
                     .padding(horizontal = 10.dp, vertical = 10.dp)
             ) {
-                Text(
-                    text = movie.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column {
+                    Text(
+                        text = movie.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (movie.year > 0) {
+                        Text(
+                            text = movie.year.toString(),
+                            color = Color.White.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
             }
         }
     }
 }
+
