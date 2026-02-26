@@ -15,7 +15,7 @@ class AuthRepository(private val context: Context) {
 
     // Web client ID (OAuth 2.0) from Firebase Console > Authentication > Sign-in method > Google
     // Replace with your actual Web client ID
-    private val webClientId = "YOUR_WEB_CLIENT_ID"
+    private val webClientId = "447337048510-0so110oqjeon62dlu9i9odp6vcbscpuk.apps.googleusercontent.com"
 
     suspend fun signInWithGoogle(): Result<String> {
         return try {

@@ -14,6 +14,22 @@ class PlayTokenRepository {
     // Region must be europe-west1 — this is where the Cloud Function is deployed
     private val functions = Firebase.functions("europe-west1")
 
+    suspend fun getCatalogToken(): Result<PlayTokenResult> {
+        return try {
+            val result = functions.getHttpsCallable("getCatalogToken").call(null).await()
+            @Suppress("UNCHECKED_CAST")
+            val data = result.getData() as? Map<String, Any>
+                ?: return Result.failure(Exception("No data in response"))
+            val token = data["token"] as? String
+                ?: return Result.failure(Exception("No token in response"))
+            val baseUrl = data["baseUrl"] as? String
+                ?: return Result.failure(Exception("No baseUrl in response"))
+            Result.success(PlayTokenResult(token = token, baseUrl = baseUrl))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getPlayToken(movieId: String): Result<PlayTokenResult> {
         return try {
             val result = functions
@@ -22,7 +38,7 @@ class PlayTokenRepository {
                 .await()
 
             @Suppress("UNCHECKED_CAST")
-            val data = result.getData<Map<String, Any>>()
+            val data = result.getData() as? Map<String, Any>
                 ?: return Result.failure(Exception("No data in response"))
 
             val token = data["token"] as? String

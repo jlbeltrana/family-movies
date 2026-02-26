@@ -31,10 +31,11 @@ fun AppNavGraph(startDestination: String) {
 
         composable("home") {
             HomeScreen(
-                onPlayVideo = { manifestUrl, token ->
-                    val encodedUrl = URLEncoder.encode(manifestUrl, StandardCharsets.UTF_8.toString())
-                    val encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8.toString())
-                    navController.navigate("player/$encodedUrl/$encodedToken")
+                onPlayVideo = { manifestUrl, token, movieId ->
+                    val encUrl = URLEncoder.encode(manifestUrl, StandardCharsets.UTF_8.toString())
+                    val encToken = URLEncoder.encode(token, StandardCharsets.UTF_8.toString())
+                    val encMovieId = URLEncoder.encode(movieId, StandardCharsets.UTF_8.toString())
+                    navController.navigate("player/$encUrl/$encToken/$encMovieId")
                 },
                 onSignOut = {
                     navController.navigate("login") {
@@ -45,23 +46,21 @@ fun AppNavGraph(startDestination: String) {
         }
 
         composable(
-            route = "player/{manifestUrl}/{token}",
+            route = "player/{manifestUrl}/{token}/{movieId}",
             arguments = listOf(
                 navArgument("manifestUrl") { type = NavType.StringType },
-                navArgument("token") { type = NavType.StringType }
+                navArgument("token") { type = NavType.StringType },
+                navArgument("movieId") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val manifestUrl = URLDecoder.decode(
-                backStackEntry.arguments?.getString("manifestUrl") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
-            val token = URLDecoder.decode(
-                backStackEntry.arguments?.getString("token") ?: "",
+            fun decode(key: String) = URLDecoder.decode(
+                backStackEntry.arguments?.getString(key) ?: "",
                 StandardCharsets.UTF_8.toString()
             )
             PlayerScreen(
-                manifestUrl = manifestUrl,
-                token = token,
+                manifestUrl = decode("manifestUrl"),
+                token = decode("token"),
+                movieId = decode("movieId"),
                 onBack = { navController.popBackStack() }
             )
         }

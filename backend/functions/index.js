@@ -91,3 +91,36 @@ export const getPlayToken = onCall(
     return { token, baseUrl: baseUrl.replace(/\/$/, "") };
   }
 );
+
+/**
+ * Devuelve un JWT de catálogo para acceder a las carátulas (movies/*\/poster.jpg).
+ * Token válido 1 hora, prefix "movies/" sin restricción de película concreta.
+ */
+export const getCatalogToken = onCall(
+  { secrets: [jwtSecret], region: "europe-west1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Debes iniciar sesión.");
+    }
+
+    const email = request.auth.token?.email;
+    if (!email) {
+      throw new HttpsError("permission-denied", "No se pudo verificar tu cuenta.");
+    }
+
+    const allowedSnap = await db.doc("config/allowedEmails").get();
+    const emails = allowedSnap.data()?.emails ?? {};
+    if (!emails[email]) {
+      throw new HttpsError("permission-denied", "No tienes permiso para usar esta app.");
+    }
+
+    const token = jwt.sign(
+      { exp: Math.floor(Date.now() / 1000) + 3600, prefix: "movies/" },
+      jwtSecret.value(),
+      { algorithm: "HS256" }
+    );
+
+    const baseUrl = workerBaseUrl.value();
+    return { token, baseUrl: baseUrl.replace(/\/$/, "") };
+  }
+);

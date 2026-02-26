@@ -72,5 +72,8 @@ function getContentType(path) {
   if (path.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
   if (path.endsWith(".ts")) return "video/MP2T";
   if (path.endsWith(".mp4")) return "video/mp4";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".webp")) return "image/webp";
   return "application/octet-stream";
 }

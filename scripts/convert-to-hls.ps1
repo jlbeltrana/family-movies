@@ -1,69 +1,86 @@
-# Convierte un archivo de vídeo (MP4 o MKV) a HLS para subir a R2.
-# Uso: .\convert-to-hls.ps1 -InputFile "ruta\pelicula.mp4" [-OutputDir "ruta\salida"] [-Slug "mi-pelicula"]
-# Requiere: FFmpeg en el PATH (https://ffmpeg.org/download.html)
-#
-# La salida queda en una carpeta con master.m3u8 y segmentos .ts, lista para subir a R2
-# bajo la ruta: movies/<slug>/ (ej. movies/mi-pelicula/master.m3u8)
+# Convierte un archivo de video (MP4 o MKV) a HLS para subir a R2.
+# Uso interactivo: .\convert-to-hls.ps1
+# Uso por parametros: .\convert-to-hls.ps1 -InputFile "ruta\pelicula.mp4" -Slug "mi-pelicula"
+# Requiere: FFmpeg en el PATH (winget install Gyan.FFmpeg)
 
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Archivo de vídeo de entrada (MP4 o MKV)")]
-    [string]$InputFile,
-    [Parameter(Mandatory = $false)]
-    [string]$OutputDir = "",
-    [Parameter(Mandatory = $false, HelpMessage = "Nombre corto para la ruta en R2 (ej. mi-pelicula). Por defecto se deduce del nombre del archivo.")]
-    [string]$Slug = ""
+    [string]$InputFile = "",
+    [string]$Slug = "",
+    [string]$OutputDir = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+    Write-Error "FFmpeg no esta en el PATH. Instalalo con: winget install Gyan.FFmpeg"
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($InputFile)) {
+    Write-Host ""
+    Write-Host "=== Convertir pelicula a HLS ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Pega la ruta del archivo de video y pulsa Enter:"
+    $InputFile = (Read-Host).Trim().Trim('"')
+}
+
+if ([string]::IsNullOrWhiteSpace($InputFile)) {
+    Write-Error "No se indico ningun archivo."
+    exit 1
+}
 
 if (-not (Test-Path $InputFile)) {
     Write-Error "No se encuentra el archivo: $InputFile"
     exit 1
 }
+
 $ext = [System.IO.Path]::GetExtension($InputFile).ToLowerInvariant()
 if ($ext -notin ".mp4", ".mkv") {
-    Write-Error "Solo se admiten archivos .mp4 y .mkv. Recibido: $ext"
+    Write-Error "Solo se admiten .mp4 y .mkv. Recibido: $ext"
     exit 1
 }
 
-# Slug para la ruta en R2: movies/<slug>/master.m3u8
 if ([string]::IsNullOrWhiteSpace($Slug)) {
-    $Slug = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
-    $Slug = $Slug -replace "[^a-zA-Z0-9\-_]", "-" -replace "-+", "-" -replace "^-|-$", ""
-    if ([string]::IsNullOrWhiteSpace($Slug)) { $Slug = "video" }
+    $autoSlug = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
+    $autoSlug = $autoSlug -replace "[^a-zA-Z0-9\-]", "-" -replace "-+", "-" -replace "^-|-$", ""
+    Write-Host ""
+    Write-Host "Slug para la ruta en R2 (ej: zootopia-2, frozen, toy-story-3)"
+    Write-Host "Pulsa Enter para usar '$autoSlug' o escribe uno nuevo:"
+    $slugResp = (Read-Host).Trim()
+    $Slug = if ([string]::IsNullOrWhiteSpace($slugResp)) { $autoSlug } else { $slugResp }
 }
+
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $scriptDir = Split-Path $MyInvocation.MyCommand.Path -Parent
-    $OutputDir = Join-Path $scriptDir "output" $Slug
+    $OutputDir = Join-Path (Join-Path $scriptDir "output") $Slug
 }
 $OutputDir = [System.IO.Path]::GetFullPath($OutputDir)
-
-# Comprobar FFmpeg
-$ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
-if (-not $ffmpeg) {
-    Write-Error "FFmpeg no está en el PATH. Instálalo desde https://ffmpeg.org/download.html"
-    exit 1
-}
 
 if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
+
 $manifestPath = Join-Path $OutputDir "master.m3u8"
+$segmentPattern = Join-Path $OutputDir "segment%03d.ts"
 
-Write-Host "Entrada:  $InputFile"
-Write-Host "Salida:   $OutputDir"
-Write-Host "Ruta R2:  movies/$Slug/master.m3u8 (y segmentos .ts)"
-Write-Host "Convirtiendo (sin re-codificar vídeo, solo empaquetado HLS)..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Entrada : $InputFile"
+Write-Host "Salida  : $OutputDir"
+Write-Host "Ruta R2 : movies/$Slug/master.m3u8"
+Write-Host ""
+Write-Host "Convirtiendo..." -ForegroundColor Cyan
 
-# -c copy = sin re-codificar (rápido); -hls_time 6 = segmentos ~6 s; -hls_list_size 0 = listar todos
-& ffmpeg -i $InputFile -c copy -f hls -hls_time 6 -hls_list_size 0 -hls_segment_filename (Join-Path $OutputDir "segment%03d.ts") $manifestPath 2>&1 | ForEach-Object { Write-Host $_ }
+$ErrorActionPreference = "Continue"
+& ffmpeg -i $InputFile -c:v copy -c:a copy -sn -f hls -hls_time 6 -hls_list_size 0 `
+    -hls_segment_filename $segmentPattern $manifestPath
+$ErrorActionPreference = "Stop"
+
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "FFmpeg falló con código $LASTEXITCODE"
+    Write-Error "FFmpeg fallo con codigo $LASTEXITCODE"
     exit 1
 }
 
-Write-Host "Listo. Archivos en: $OutputDir" -ForegroundColor Green
-Write-Host "Para subir a R2, desde la raíz del repo:"
-Write-Host "  cd cloudflare-worker"
-Write-Host "  npx wrangler r2 object put family-movies-media/movies/$Slug/master.m3u8 --file=../scripts/output/$Slug/master.m3u8"
-Write-Host "  (y un put por cada segment*.ts, o usa el dashboard de Cloudflare R2 para subir la carpeta.)"
+Write-Host ""
+Write-Host "Listo." -ForegroundColor Green
+Write-Host "Siguiente paso: subir a R2 con:"
+Write-Host "  .\upload-hls-to-r2.ps1 -Slug `"$Slug`"" -ForegroundColor Yellow

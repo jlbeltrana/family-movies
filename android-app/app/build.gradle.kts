@@ -76,4 +76,7 @@ dependencies {
     implementation(libs.credentials)
     implementation(libs.credentials.play.services.auth)
     implementation(libs.googleid)
+
+    // Coil (carga de imágenes con soporte JWT)
+    implementation(libs.coil.compose)
 }
