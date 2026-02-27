@@ -24,6 +24,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -60,6 +62,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState) {
         when (uiState) {
@@ -93,7 +96,9 @@ fun HomeScreen(
                     CatalogContent(
                         state = state,
                         selectedCategory = selectedCategory,
+                        searchQuery = searchQuery,
                         onSelectCategory = { viewModel.selectCategory(it) },
+                        onSearchQueryChange = { viewModel.setSearchQuery(it) },
                         onMovieClick = { onNavigateToDetail(it) },
                         onSignOut = {
                             Firebase.auth.signOut()
@@ -132,7 +137,9 @@ fun HomeScreen(
 private fun CatalogContent(
     state: HomeUiState.Ready,
     selectedCategory: String,
+    searchQuery: String,
     onSelectCategory: (String) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onMovieClick: (movieId: String) -> Unit,
     onSignOut: () -> Unit
 ) {
@@ -142,10 +149,9 @@ private fun CatalogContent(
         .distinct()
         .sorted()
 
-    val filteredMovies = if (selectedCategory == "Todas") {
-        state.movies
-    } else {
-        state.movies.filter { it.category == selectedCategory }
+    val filteredMovies = state.movies.filter { movie ->
+        (selectedCategory == "Todas" || movie.category == selectedCategory) &&
+        (searchQuery.isBlank() || movie.title.contains(searchQuery, ignoreCase = true))
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -193,8 +199,38 @@ private fun CatalogContent(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
 
+            // Barra de búsqueda
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                placeholder = {
+                    Text("Buscar película...", color = Color.White.copy(alpha = 0.35f))
+                },
+                singleLine = true,
+                trailingIcon = if (searchQuery.isNotEmpty()) {
+                    {
+                        TextButton(onClick = { onSearchQueryChange("") }) {
+                            Text("✕", color = Color.White.copy(alpha = 0.5f))
+                        }
+                    }
+                } else null,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Purple,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = Purple,
+                    focusedContainerColor = Color.White.copy(alpha = 0.06f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.03f),
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp)
+            )
+
             // Tabs de categoría
-            if (categories.size > 1) {
+            if (categories.size > 1 && searchQuery.isBlank()) {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -226,20 +262,32 @@ private fun CatalogContent(
                 }
             }
 
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 150.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(filteredMovies, key = { it.id }) { movie ->
-                    MovieCard(
-                        movie = movie,
-                        catalogToken = state.catalogToken,
-                        baseUrl = state.baseUrl,
-                        onClick = { onMovieClick(movie.id) }
+            if (filteredMovies.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Sin resultados para \"$searchQuery\"",
+                        color = Color.White.copy(alpha = 0.5f)
                     )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 150.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filteredMovies, key = { it.id }) { movie ->
+                        MovieCard(
+                            movie = movie,
+                            catalogToken = state.catalogToken,
+                            baseUrl = state.baseUrl,
+                            onClick = { onMovieClick(movie.id) }
+                        )
+                    }
                 }
             }
         }

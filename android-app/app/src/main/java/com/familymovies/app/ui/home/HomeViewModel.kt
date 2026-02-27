@@ -44,6 +44,9 @@ class HomeViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
     init {
         loadAll()
     }
@@ -96,6 +99,10 @@ class HomeViewModel : ViewModel() {
 
     fun selectCategory(category: String) {
         _selectedCategory.value = category
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
     }
 
     fun refresh() {

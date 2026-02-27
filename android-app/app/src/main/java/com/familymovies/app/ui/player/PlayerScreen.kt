@@ -1,6 +1,7 @@
 package com.familymovies.app.ui.player
 
 import android.app.Activity
+import android.media.AudioManager
 import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -8,11 +9,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +68,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.familymovies.app.data.firestore.FirestoreRepository
 import com.familymovies.app.ui.theme.Purple
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -85,6 +90,9 @@ fun PlayerScreen(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val firestoreRepository = remember { FirestoreRepository() }
+    val activity = remember { context as? Activity }
+    val audioManager = remember { context.getSystemService(AudioManager::class.java) }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
 
     var savedPosition by remember { mutableLongStateOf(0L) }
     var showResumeDialog by remember { mutableStateOf(false) }
@@ -107,11 +115,25 @@ fun PlayerScreen(
     var skipVisible by remember { mutableStateOf(false) }
     var skipIsLeft by remember { mutableStateOf(true) }
 
+    // Volume / brightness
+    var volumeLevel by remember {
+        mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
+    }
+    var brightnessLevel by remember {
+        mutableFloatStateOf(
+            activity?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f
+        )
+    }
+    var showVolumeOverlay by remember { mutableStateOf(false) }
+    var showBrightnessOverlay by remember { mutableStateOf(false) }
+
     // Counters to restart LaunchedEffects
     var autoHideKey by remember { mutableIntStateOf(0) }
     var hideSkipKey by remember { mutableIntStateOf(0) }
+    var hideVolumeKey by remember { mutableIntStateOf(0) }
+    var hideBrightnessKey by remember { mutableIntStateOf(0) }
 
-    // Auto-hide controls after 3 s of inactivity
+    // Auto-hide controls after 3 s
     LaunchedEffect(autoHideKey) {
         delay(CONTROLS_HIDE_DELAY_MS)
         if (!isLocked && !isSeeking) controlsVisible = false
@@ -123,15 +145,36 @@ fun PlayerScreen(
         skipVisible = false
     }
 
+    // Auto-hide volume overlay after 1.5 s
+    LaunchedEffect(hideVolumeKey) {
+        delay(1500)
+        showVolumeOverlay = false
+    }
+
+    // Auto-hide brightness overlay after 1.5 s
+    LaunchedEffect(hideBrightnessKey) {
+        delay(1500)
+        showBrightnessOverlay = false
+    }
+
     // Immersive full-screen
     DisposableEffect(Unit) {
-        val activity = context as? Activity
         val ctrl = activity?.let { WindowCompat.getInsetsController(it.window, view) }
         ctrl?.apply {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         onDispose { ctrl?.show(WindowInsetsCompat.Type.systemBars()) }
+    }
+
+    // Restore system brightness on exit
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.window?.attributes?.let { attrs ->
+                attrs.screenBrightness = -1f // -1 = system default
+                activity.window.attributes = attrs
+            }
+        }
     }
 
     // Load saved progress
@@ -224,10 +267,11 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // ── Transparent gesture capture layer ─────────────────────────────
+        // ── Gesture layer: tap/double-tap + vertical drag ─────────────────
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                // Tap/double-tap: toggle controls & skip ±10s
                 .pointerInput(isLocked) {
                     detectTapGestures(
                         onTap = {
@@ -250,6 +294,40 @@ fun PlayerScreen(
                                 hideSkipKey++
                                 controlsVisible = true
                                 autoHideKey++
+                            }
+                        }
+                    )
+                }
+                // Vertical drag: left half = brightness, right half = volume
+                .pointerInput(isLocked) {
+                    var dragStartX = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { offset -> dragStartX = offset.x },
+                        onVerticalDrag = { change, dragAmount ->
+                            if (!isLocked) {
+                                // Sensitivity: full screen height = 100% change
+                                val fraction = -dragAmount / size.height.toFloat()
+                                if (dragStartX < size.width / 2f) {
+                                    // Left side → brightness
+                                    brightnessLevel = (brightnessLevel + fraction).coerceIn(0.01f, 1f)
+                                    activity?.window?.attributes?.let { attrs ->
+                                        attrs.screenBrightness = brightnessLevel
+                                        activity.window.attributes = attrs
+                                    }
+                                    showBrightnessOverlay = true
+                                    hideBrightnessKey++
+                                } else {
+                                    // Right side → volume
+                                    volumeLevel = (volumeLevel + fraction).coerceIn(0f, 1f)
+                                    audioManager.setStreamVolume(
+                                        AudioManager.STREAM_MUSIC,
+                                        (volumeLevel * maxVolume).roundToInt(),
+                                        0
+                                    )
+                                    showVolumeOverlay = true
+                                    hideVolumeKey++
+                                }
+                                change.consume()
                             }
                         }
                     )
@@ -290,6 +368,34 @@ fun PlayerScreen(
             ) {
                 Text("+10s", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
+        }
+
+        // ── Brightness overlay (left side, center) ────────────────────────
+        AnimatedVisibility(
+            visible = showBrightnessOverlay,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            LevelOverlay(
+                icon = "☀️",
+                level = brightnessLevel,
+                modifier = Modifier.padding(start = 24.dp)
+            )
+        }
+
+        // ── Volume overlay (right side, center) ───────────────────────────
+        AnimatedVisibility(
+            visible = showVolumeOverlay,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            LevelOverlay(
+                icon = if (volumeLevel < 0.01f) "🔇" else if (volumeLevel < 0.5f) "🔉" else "🔊",
+                level = volumeLevel,
+                modifier = Modifier.padding(end = 24.dp)
+            )
         }
 
         // ── Buffering indicator ───────────────────────────────────────────
@@ -513,6 +619,49 @@ fun PlayerScreen(
                 containerColor = Color(0xFF1A1A2E)
             )
         }
+    }
+}
+
+// ── Level indicator overlay — vertical pill, estilo moderno ──────────────────
+@Composable
+private fun LevelOverlay(icon: String, level: Float, modifier: Modifier = Modifier) {
+    val clamped = level.coerceIn(0f, 1f)
+    Column(
+        modifier = modifier
+            .background(Color(0xEE0D0D1A), RoundedCornerShape(28.dp))
+            .padding(horizontal = 18.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(icon, fontSize = 22.sp)
+
+        // Pill track
+        Box(
+            modifier = Modifier
+                .size(width = 14.dp, height = 130.dp)
+                .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(7.dp))
+        ) {
+            // Fill — grows from bottom upward with gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(clamped)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.White, Purple.copy(alpha = 0.8f))
+                        ),
+                        RoundedCornerShape(7.dp)
+                    )
+            )
+        }
+
+        Text(
+            text = "${(clamped * 100).roundToInt()}%",
+            color = Color.White.copy(alpha = 0.65f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
