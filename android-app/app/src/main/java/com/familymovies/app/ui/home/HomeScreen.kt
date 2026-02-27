@@ -185,7 +185,7 @@ private fun CatalogContent(
             }
         } else {
             Text(
-                text = "¿Qué vemos hoy? ✨",
+                text = "🐻 Osita, ¿qué vemos hoy?",
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontWeight = FontWeight.Bold,
                     color = Color.White

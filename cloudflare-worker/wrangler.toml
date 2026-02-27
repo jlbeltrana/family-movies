@@ -1,7 +1,8 @@
 name = "family-movies-worker"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
-account_id = "99cc37ba8059f8b421e20a834bef5b30"
+# account_id se configura via variable de entorno CLOUDFLARE_ACCOUNT_ID
+# o ejecutando: npx wrangler login (lo detecta automáticamente)
 
 # R2: binding al bucket donde están los vídeos HLS
 [[r2_buckets]]
