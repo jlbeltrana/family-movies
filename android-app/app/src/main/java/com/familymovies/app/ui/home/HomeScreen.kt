@@ -227,7 +227,7 @@ private fun CatalogContent(
             }
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(minSize = 150.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
