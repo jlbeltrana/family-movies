@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,6 +40,7 @@ fun LoginScreen(
     viewModel: LoginViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState) {
         if (uiState is LoginUiState.Success) {
@@ -111,10 +113,10 @@ fun LoginScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    GoogleSignInButton { viewModel.signInWithGoogle() }
+                    GoogleSignInButton { viewModel.signInWithGoogle(context) }
                 }
                 else -> {
-                    GoogleSignInButton { viewModel.signInWithGoogle() }
+                    GoogleSignInButton { viewModel.signInWithGoogle(context) }
                 }
             }
         }

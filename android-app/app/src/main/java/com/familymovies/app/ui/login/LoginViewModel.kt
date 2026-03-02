@@ -1,7 +1,7 @@
 package com.familymovies.app.ui.login
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import android.content.Context
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.familymovies.app.data.auth.AuthRepository
 import com.familymovies.app.data.firestore.FirestoreRepository
@@ -16,18 +16,18 @@ sealed class LoginUiState {
     data class Error(val message: String) : LoginUiState()
 }
 
-class LoginViewModel(application: Application) : AndroidViewModel(application) {
+class LoginViewModel : ViewModel() {
 
-    private val authRepository = AuthRepository(application)
+    private val authRepository = AuthRepository()
     private val firestoreRepository = FirestoreRepository()
 
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState
 
-    fun signInWithGoogle() {
+    fun signInWithGoogle(context: Context) {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
-            authRepository.signInWithGoogle().fold(
+            authRepository.signInWithGoogle(context).fold(
                 onSuccess = { email ->
                     val allowed = firestoreRepository.isUserAllowed(email)
                     if (allowed) {

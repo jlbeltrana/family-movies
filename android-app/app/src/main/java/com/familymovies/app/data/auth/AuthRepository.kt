@@ -1,5 +1,6 @@
 package com.familymovies.app.data.auth
 
+import android.app.Activity
 import android.content.Context
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -11,15 +12,13 @@ import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.tasks.await
 
-class AuthRepository(private val context: Context) {
+class AuthRepository {
 
-    // Web client ID (OAuth 2.0) from Firebase Console > Authentication > Sign-in method > Google
-    // Replace with your actual Web client ID
     private val webClientId = "447337048510-0so110oqjeon62dlu9i9odp6vcbscpuk.apps.googleusercontent.com"
 
-    suspend fun signInWithGoogle(): Result<String> {
+    suspend fun signInWithGoogle(activityContext: Context): Result<String> {
         return try {
-            val credentialManager = CredentialManager.create(context)
+            val credentialManager = CredentialManager.create(activityContext)
 
             val googleIdOption = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
@@ -31,7 +30,7 @@ class AuthRepository(private val context: Context) {
                 .addCredentialOption(googleIdOption)
                 .build()
 
-            val result = credentialManager.getCredential(context = context, request = request)
+            val result = credentialManager.getCredential(context = activityContext, request = request)
             val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
             val idToken = googleIdTokenCredential.idToken
 
