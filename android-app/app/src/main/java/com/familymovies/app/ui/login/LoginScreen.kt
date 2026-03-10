@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +45,8 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
 
     LaunchedEffect(uiState) {
         if (uiState is LoginUiState.Success) {
@@ -69,12 +75,15 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
+                .widthIn(max = 480.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 40.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 40.dp, vertical = 32.dp)
         ) {
-            Text(text = "🎬", style = MaterialTheme.typography.displayMedium)
-
-            Spacer(modifier = Modifier.height(4.dp))
+            if (!isLandscape) {
+                Text(text = "🎬", style = MaterialTheme.typography.displayMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
             Text(
                 text = "Lucy Movies",
@@ -91,7 +100,7 @@ fun LoginScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(if (isLandscape) 16.dp else 40.dp))
 
             when (val state = uiState) {
                 is LoginUiState.Loading -> {

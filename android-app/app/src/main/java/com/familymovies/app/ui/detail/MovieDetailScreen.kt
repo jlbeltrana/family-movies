@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,6 +69,8 @@ fun MovieDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val playTokenRepository = remember { PlayTokenRepository() }
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
 
     Box(
         modifier = Modifier
@@ -78,16 +82,13 @@ fun MovieDetailScreen(
                 modifier = Modifier.align(Alignment.Center),
                 color = Purple
             )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                // Poster grande con gradiente
+        } else if (isLandscape) {
+            // Layout horizontal: poster izquierda, info derecha
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Poster
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxHeight()
                         .aspectRatio(2f / 3f)
                 ) {
                     AsyncImage(
@@ -100,19 +101,17 @@ fun MovieDetailScreen(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
-                    // Gradiente inferior
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .align(Alignment.BottomCenter)
+                            .fillMaxHeight()
+                            .width(80.dp)
+                            .align(Alignment.CenterEnd)
                             .background(
-                                Brush.verticalGradient(
+                                Brush.horizontalGradient(
                                     colors = listOf(Color.Transparent, DarkBackground)
                                 )
                             )
                     )
-                    // Botón atrás
                     TextButton(
                         onClick = onBack,
                         modifier = Modifier
@@ -123,50 +122,21 @@ fun MovieDetailScreen(
                         Text(
                             "← Atrás",
                             color = Color.White,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
                         )
                     }
                 }
 
-                // Info de la película
+                // Info + botón
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 32.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Text(
-                        text = movie.title,
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (movie.year > 0) {
-                            InfoChip(text = movie.year.toString())
-                        }
-                        if (movie.duration > 0) {
-                            InfoChip(text = "${movie.duration} min")
-                        }
-                        if (movie.category.isNotBlank()) {
-                            InfoChip(text = movie.category.replaceFirstChar { it.uppercase() })
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // Botón reproducir
-                    Button(
-                        onClick = {
-                            if (isLoading) return@Button
+                    MovieInfo(movie = movie, isLoading = isLoading, error = error, onPlay = {
+                        if (!isLoading) {
                             error = null
                             isLoading = true
                             scope.launch {
@@ -182,44 +152,135 @@ fun MovieDetailScreen(
                                     }
                                 )
                             }
-                        },
+                        }
+                    })
+                }
+            }
+        } else {
+            // Layout vertical (portrait)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("${ready.baseUrl}/${movie.posterPath}")
+                            .addHeader("Authorization", "Bearer ${ready.catalogToken}")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = movie.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Purple)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text("Cargando...", style = MaterialTheme.typography.bodyLarge)
-                        } else {
-                            Text(
-                                "▶  Reproducir",
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Bold
+                            .height(200.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, DarkBackground)
                                 )
                             )
-                        }
-                    }
-
-                    if (error != null) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                    )
+                    TextButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .statusBarsPadding()
+                            .padding(8.dp)
+                    ) {
                         Text(
-                            text = error!!,
-                            color = Color(0xFFFF6B6B),
-                            style = MaterialTheme.typography.bodySmall
+                            "← Atrás",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
                         )
                     }
+                }
 
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                ) {
+                    MovieInfo(movie = movie, isLoading = isLoading, error = error, onPlay = {
+                        if (!isLoading) {
+                            error = null
+                            isLoading = true
+                            scope.launch {
+                                playTokenRepository.getPlayToken(movieId).fold(
+                                    onSuccess = { result ->
+                                        val manifestUrl = "${result.baseUrl}/movies/$movieId/master.m3u8"
+                                        isLoading = false
+                                        onPlay(manifestUrl, result.token, movieId)
+                                    },
+                                    onFailure = { e ->
+                                        isLoading = false
+                                        error = e.message ?: "Error al obtener el token"
+                                    }
+                                )
+                            }
+                        }
+                    })
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MovieInfo(
+    movie: com.familymovies.app.data.model.Movie,
+    isLoading: Boolean,
+    error: String?,
+    onPlay: () -> Unit
+) {
+    Text(
+        text = movie.title,
+        style = MaterialTheme.typography.headlineMedium.copy(
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (movie.year > 0) InfoChip(text = movie.year.toString())
+        if (movie.duration > 0) InfoChip(text = "${movie.duration} min")
+        if (movie.category.isNotBlank()) InfoChip(text = movie.category.replaceFirstChar { it.uppercase() })
+    }
+
+    Spacer(modifier = Modifier.height(32.dp))
+
+    Button(
+        onClick = onPlay,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Purple)
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text("Cargando...", style = MaterialTheme.typography.bodyLarge)
+        } else {
+            Text("▶  Reproducir", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
+        }
+    }
+
+    if (error != null) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(text = error, color = Color(0xFFFF6B6B), style = MaterialTheme.typography.bodySmall)
     }
 }
 
